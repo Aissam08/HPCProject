@@ -1,28 +1,27 @@
 CC = gcc-10
-CCFLAGS = -Wall -g -O3
-LDFLAGS = -fopenmp
+CCFLAGS := -Wall -g -O3
+LDFLAGS := -I../includes
+LFLAGS = -fopenmp
+
+SRC := $(wildcard *.c)
+EXEC := $(SRC:%.c=%)
+
+SAVES := 
 
 
-SRC = $(wildcard $(DIR)/*.c)
-OBJ = $(SRC:%.c=%.o)
+all: 
+	@make $(EXEC)
 
-CMD = $(CC) $(CCFLAGS) $(filter-out $(EXEC:%=$(DIR)/%.o), $(OBJ)) $(exe:%=%.o) -o $(exe) $(LDFLAGS)
-
-
-EXEC = exact_cover
-
-
-all: $(EXEC:%=$(DIR)/%)
-
-$(EXEC:%=$(DIR)/%): $(OBJ)
-	$(foreach exe, $@, $(CMD))
-
-$(DIR)/%.o: $(DIR)/%.c
-	$(CC) $(CCFLAGS) -o $@ -c $<
+%: %.c
+	$(CC) $(CCFLAGS) -o $@ -c $< $(LDFLAGS)
 
 
 clean:
-	@rm -f $(OBJ) $(EXEC:%=$(DIR)/%)
-	@echo "Removed exe & object files"
+	@rm -f $(EXEC)
+	@echo "Removed executable files"
 
-.PHONY: clean
+distclean: clean
+	@rm -f $(SAVES)
+	@echo "Removed save files"
+
+.PHONY: clean distclean

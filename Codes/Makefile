@@ -1,19 +1,13 @@
-APP = openMP MPI seq vectorize
+DIRS := $(wildcard */)
+APP := $(DIRS:%/=%)
+
 
 all: $(APP)
+	@$(foreach app, $(APP), cd $(app); make;)
 
-openMP:
+*:
 	@cd $@; make
 
-MPI:
-	@cd $@; make
-
-seq:
-	@cd $@; make
-
-
-vectorize:
-	@cd $@; make
 
 clean:
 	@$(foreach app, $(APP), cd $(app); make clean; cd ..;)
@@ -21,4 +15,5 @@ clean:
 distclean: 
 	@$(foreach app, $(APP), cd $(app); make distclean; cd ..;)
 
-.PHONY: openMP MPI seq vectorize clean distclean
+
+.PHONY: $(APP) clean distclean
