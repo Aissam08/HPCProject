@@ -13,7 +13,7 @@ all:
 	@make $(EXEC)
 
 %: %.c
-	$(CC) $(CCFLAGS) -o $@ -c $< $(LDFLAGS)
+	$(CC) $(CCFLAGS) $^ -o $@ $(LDFLAGS)
 
 
 clean:

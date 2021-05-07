@@ -1,7 +1,7 @@
 CC = gcc-10
 CCFLAGS := -Wall -g -O3
 LDFLAGS := -I../includes
-LFLAGS := -fopenmp
+LFLAGS := 
 
 SRC := $(wildcard *.c)
 EXEC := $(SRC:%.c=%)
@@ -13,7 +13,7 @@ all:
 	@make $(EXEC)
 
 %: %.c
-	$(CC) $(CCFLAGS) -o $@ -c $< $(LDFLAGS)
+	$(CC) $(CCFLAGS) $^ -o $@ $(LDFLAGS)
 
 
 clean:
