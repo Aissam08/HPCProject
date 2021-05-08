@@ -1,7 +1,7 @@
-CC = gcc-10
-CCFLAGS := -Wall -g -O3
-LDFLAGS := -I../includes
-LFLAGS := 
+CC := gcc-10
+CCFLAGS := -Wall -O3
+LDFLAGS := -I../../includes -L../../lib
+LFLAGS :=
 
 SRC := $(wildcard *.c)
 EXEC := $(SRC:%.c=%)
@@ -13,7 +13,7 @@ all:
 	@make $(EXEC)
 
 %: %.c
-	$(CC) $(CCFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CC) $(CCFLAGS) $^ -o $@ $(LDFLAGS) $(LFLAGS)
 
 
 clean:

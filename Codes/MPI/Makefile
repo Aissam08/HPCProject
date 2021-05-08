@@ -1,6 +1,7 @@
 CC := mpicc
-CCFLAGS := -Wall -g -O3
-LDFLAGS := -I../includes
+CCFLAGS := -Wall -O3
+LDFLAGS := -I../../includes -L../../lib
+LFLAGS := 
 
 SRC := $(wildcard *.c)
 EXEC := $(SRC:%.c=%)
@@ -8,11 +9,22 @@ EXEC := $(SRC:%.c=%)
 SAVES := 
 
 
-all: 
+all:
 	@make $(EXEC)
 
 %: %.c
-	$(CC) $(CCFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CC) $(CCFLAGS) $^ -o $@ $(LDFLAGS) $(LFLAGS)
+
+
+reserve_%:
+	oarsub -l nodes=$(@:reserve%=%),walltime=1 -I
+
+run_%:
+	@make $(@:run_%=%)
+	mpiexec --mca btl_base_warn_component_unused 0 --hostfile '$$OAR_NODEFILE' --map-by ppr:1:node $(@:run_%=%)
+
+run: $(EXEC)
+	@$(foreach exe, $(EXEC), make run_$(exe);)
 
 
 clean:

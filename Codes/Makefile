@@ -3,7 +3,6 @@ APP := $(DIRS:%/=%)
 
 
 all: $(APP)
-	@$(foreach app, $(APP), cd $(app); make;)
 
 *:
 	@cd $@; make
