@@ -1,6 +1,6 @@
 CC := gcc-10
 CCFLAGS := -Wall -O3
-LDFLAGS := -I../../includes -L../../lib
+LDFLAGS := -I../../includes -L../../lib -lcoverfunc
 LFLAGS :=
 
 SRC := $(wildcard *.c)
