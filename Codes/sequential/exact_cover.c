@@ -1,7 +1,6 @@
 #include <cover_functions.h>
 
 
-
 int main(int argc, char **argv)
 {
 	struct option longopts[5] = {

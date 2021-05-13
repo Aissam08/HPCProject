@@ -1,6 +1,6 @@
 CC := gcc-10
 CCFLAGS := -Wall -O3
-LDFLAGS := -I../../includes -L../../lib -lcoverfunc
+INFLAGS := -I../../includes
 LFLAGS := -fopenmp
 
 SRC := $(wildcard *.c)
@@ -13,7 +13,7 @@ all:
 	@make $(EXEC)
 
 %: %.c
-	$(CC) $(CCFLAGS) $^ -o $@ $(LDFLAGS) $(LFLAGS)
+	$(CC) $(CCFLAGS) $^ -o $@ $(INFLAGS) $(LFLAGS)
 
 
 clean:
