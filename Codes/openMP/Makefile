@@ -13,8 +13,8 @@ all:
 	@make $(EXEC)
 
 %: %.c
-	$(CC) $(CCFLAGS) $^ -o $@ $(INFLAGS) $(LFLAGS)
-
+	#$(CC) $(CCFLAGS) $^ -o $@ $(INFLAGS) $(LFLAGS)
+	$(CC) $(CCFLAGS) $^ -o $@ $(LFLAGS)
 
 clean:
 	@rm -f $(EXEC)
