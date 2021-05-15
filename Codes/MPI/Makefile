@@ -1,5 +1,5 @@
 CC := mpicc
-CCFLAGS := -Wall -O3
+CCFLAGS := -Wall -O3 -g
 INFLAGS := -I../../includes
 LFLAGS := 
 
@@ -21,7 +21,7 @@ reserve_%:
 
 run_%:
 	@make $(@:run_%=%)
-	mpiexec --mca btl_base_warn_component_unused 0 --hostfile '$$OAR_NODEFILE' --map-by ppr:1:node $(@:run_%=%)
+	mpiexec --mca btl_base_warn_component_unused 0 --hostfile $OAR_NODEFILE --map-by ppr:1:node $(@:run_%=%)
 
 run: $(EXEC)
 	@$(foreach exe, $(EXEC), make run_$(exe);)

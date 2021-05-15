@@ -39,6 +39,8 @@ int main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &nb_proc);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
+	printf("First step done\n");
+
 	struct option longopts[5] = {
 		{"in", required_argument, NULL, 'i'},
 		{"progress-report", required_argument, NULL, 'v'},
@@ -48,6 +50,7 @@ int main(int argc, char **argv)
 	};
 
 	char ch;
+	printf("Second step done\n");
 	while ((ch = getopt_long(argc, argv, "", longopts, NULL)) != -1) {
 		switch (ch) {
 		case 'i':
@@ -71,12 +74,16 @@ int main(int argc, char **argv)
 	next_report = report_delta;
 
 	struct instance_t * instance = load_matrix(in_filename);
+
+	printf("NB itemq%d\n",instance->n_items);
 	struct context_t * ctx = backtracking_setup(instance);
+
+	printf("Third step done\n");
 	start = wtime();
 	solve_MPI(instance, ctx, status, nb_proc, my_rank);
 	printf("FINI. Trouvé %lld solutions en %.1fs\n", ctx->solutions, 
 			wtime() - start);
-	exit(EXIT_SUCCESS);
-
+	printf("Finish step done\n");
 	MPI_Finalize();
+	exit(EXIT_SUCCESS);
 }
