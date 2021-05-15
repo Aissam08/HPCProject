@@ -16,14 +16,27 @@ void solve_OMP(const struct instance_t * instance, struct context_t * ctx)
 		return;           /* échec : impossible de couvrir chosen_item */
 	cover(instance, ctx, chosen_item);
 	ctx->num_children[ctx->level] = active_options->len;
-	for (int k = 0; k < active_options->len; k++) {
-		int option = active_options->p[k];
-		ctx->child_num[ctx->level] = k;
-		choose_option(instance, ctx, option, chosen_item);
-		solve(instance, ctx);
-		if (ctx->solutions >= max_solutions)
-			return;
-		unchoose_option(instance, ctx, option, chosen_item);
+
+	bool cancel = false;
+	#pragma omp parallel for shared(instance, ctx, chosen_item)
+	for (int k = 0; k < active_options->len; k++)
+	{
+		if (!cancel)
+		{
+			int option = active_options->p[k];
+			ctx->child_num[ctx->level] = k;
+			#pragma omp task
+			choose_option(instance, ctx, option, chosen_item);
+			#pragma omp task
+			solve(instance, ctx);
+			if (ctx->solutions >= max_solutions)
+				cancel = true;
+			if (!cancel)
+			{
+				#pragma omp task
+				unchoose_option(instance, ctx, option, chosen_item);
+			}
+		}
 	}
 
 	uncover(instance, ctx, chosen_item);                      /* backtrack */
