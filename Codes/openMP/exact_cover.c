@@ -6,6 +6,7 @@
 #include <err.h>
 #include <getopt.h>
 #include <sys/time.h>
+#include <omp.h>
 
 /* changelog :
 2021-04-12 18:30, instance->n_primary was not properly initialized
@@ -71,7 +72,7 @@ void solution_found(const struct instance_t *instance, struct context_t *ctx);
 void cover(const struct instance_t *instance, struct context_t *ctx, int item);
 void choose_option(const struct instance_t *instance, struct context_t *ctx, int option, int chosen_item);
 void uncover(const struct instance_t *instance, struct context_t *ctx, int item);
-void unchoose_option(const struct instance_t *instance, struct context_t *ctx, int option, int chosen_item)
+void unchoose_option(const struct instance_t *instance, struct context_t *ctx, int option, int chosen_item);
 int choose_next_item(struct context_t *ctx);
 void progress_report(const struct context_t *ctx);
 void deactivate(const struct instance_t *instance, struct context_t *ctx, int option, int covered_item);
@@ -385,6 +386,7 @@ struct instance_t * load_matrix(const char *filename)
                         id[j] = '\0';
                         if (current_item == instance->n_items)
                                 errx(1, "Objet excedentaire : %s", id);
+
                         for (int k = 0; k < current_item; k++)
                                 if (strcmp(id, instance->item_name[k]) == 0)
                                         errx(1, "Nom d'objets dupliqué : %s", id);
@@ -518,12 +520,18 @@ struct context_t * backtracking_setup(const struct instance_t *instance)
                 || ctx->child_num == NULL || ctx->num_children == NULL)
                 err(1, "impossible d'allouer le contexte");
         ctx->active_items = sparse_array_init(n);
+
+        #pragma omp for
         for (int item = 0; item < instance->n_primary; item++)
                 sparse_array_add(ctx->active_items, item);
 
+        #pragma omp for
         for (int item = 0; item < n; item++)
                 ctx->active_options[item] = sparse_array_init(m);
+
+        #pragma omp parallel
         for (int option = 0; option < m; option++)
+                #pragma omp for
                 for (int k = instance->ptr[option]; k < instance->ptr[option + 1]; k++) {
                         int item = instance->options[k];
                         sparse_array_add(ctx->active_options[item], option);
@@ -534,7 +542,17 @@ struct context_t * backtracking_setup(const struct instance_t *instance)
         return ctx;
 }
 
-void solve(const struct instance_t *instance, struct context_t *ctx)
+void solve_init(const struct instance_t *instance, struct context_t *ctx, int depth);
+
+void solve_OMP(const struct instance_t *instance, struct context_t *ctx)
+{
+        #pragma omp parallel
+        #pragma omp single
+        return solve_init(instance, ctx, 0);
+}
+
+
+void solve_end(const struct instance_t *instance, struct context_t *ctx)
 {
         ctx->nodes++;
         if (ctx->nodes == next_report)
@@ -553,7 +571,7 @@ void solve(const struct instance_t *instance, struct context_t *ctx)
                 int option = active_options->p[k];
                 ctx->child_num[ctx->level] = k;
                 choose_option(instance, ctx, option, chosen_item);
-                solve(instance, ctx);
+                solve_end(instance, ctx);
                 if (ctx->solutions >= max_solutions)
                         return;
                 unchoose_option(instance, ctx, option, chosen_item);
@@ -561,6 +579,25 @@ void solve(const struct instance_t *instance, struct context_t *ctx)
 
         uncover(instance, ctx, chosen_item);                      /* backtrack */
 }
+
+void solve_init(const struct instance_t *instance, struct context_t *ctx, int depth)
+{
+        std::vector<int> foos(active_options->len);
+        for(int k = 0; k < active_options->len; k++) {
+                #pragma omp task
+                {
+                        if (depth < active_options->len) {
+                                foos[i] = solve_init(instance, ctx, depth + 1);
+                        } else {
+                                foos[i] = solve_end(instance, ctx);
+                        }
+                }
+        }
+    #pragma omp taskwait
+    return solution_found(instance, ctx);
+}
+
+
 
 int main(int argc, char **argv)
 {
