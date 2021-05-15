@@ -39,7 +39,7 @@ int main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &nb_proc);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-	printf("First step done\n");
+	printf("Process n°%d on %d\n",my_rank, nb_proc);
 
 	struct option longopts[5] = {
 		{"in", required_argument, NULL, 'i'},
