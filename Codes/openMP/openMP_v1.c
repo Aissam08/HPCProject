@@ -5,55 +5,41 @@
 #include <cover_functions.h>
 
 
-void solve_OMP(const struct instance_t * instance)
+unsigned short int nb_thread;
+
+
+void solve_OMP(const struct instance_t * instance, struct context_t ** ctxs)
 {
-	unsigned short int nb_thread = omp_get_max_threads();
 	int chosen_item;
 	struct sparse_array_t * active_options;
-	struct context_t ** ctxs = (struct context_t **) malloc(nb_thread * sizeof(* ctxs));
-	
-	// #pragma omp parallel for schedule(static, 1)
+
+	chosen_item = choose_next_item(ctxs[0]);
+	active_options = ctxs[0]->active_options[chosen_item];
+
+	#pragma omp parallel for schedule(static, 1)
 	for (unsigned short int i = 0; i < nb_thread; ++i)
 	{
-		ctxs[i] = backtracking_setup(instance);
-		ctxs[i]->nodes++;
-		if (!i) {
-			chosen_item = choose_next_item(ctxs[0]);
-			active_options = ctxs[0]->active_options[chosen_item];
-		}
 		cover(instance, ctxs[i], chosen_item);
 		ctxs[i]->num_children[0] = active_options->len;
 	}
 
 	#pragma omp parallel for schedule(dynamic)
-	for (int k = 0; k < active_options->len; k++) {
-
-		// printf("Thread %d got k = %d\n", omp_get_thread_num(), k);
-
+	for (int k = 0; k < active_options->len; k++)
+	{
+		unsigned int th_num = omp_get_thread_num();
 		int option = active_options->p[k];
+		ctxs[th_num]->child_num[ctxs[th_num]->level] = k;
+		choose_option(instance, ctxs[th_num], option, chosen_item);
+		solve(instance, ctxs[th_num]);
 
-		// printf("Thread %d DEBUG 1\n", omp_get_thread_num());
-
-		ctxs[omp_get_thread_num()]->child_num[ctxs[omp_get_thread_num()]->level] = k;
-
-		// printf("Thread %d DEBUG 2\n", omp_get_thread_num());
-
-		choose_option(instance, ctxs[omp_get_thread_num()], option, chosen_item);
-
-		// printf("Thread %d DEBUG 3\n", omp_get_thread_num());
-
-		solve(instance, ctxs[omp_get_thread_num()]);
-
-		// printf("Thread %d DEBUG 4\n", omp_get_thread_num());
-
-		if (ctxs[omp_get_thread_num()]->solutions >= max_solutions)
+		if (ctxs[th_num]->solutions >= max_solutions)
 			exit(0);
-
-		// printf("Thread %d DEBUG 5\n", omp_get_thread_num());
-
-		unchoose_option(instance, ctxs[omp_get_thread_num()], option, chosen_item);
+		unchoose_option(instance, ctxs[th_num], option, chosen_item);
 	}
-	uncover(instance, ctxs[omp_get_thread_num()], chosen_item);		/* backtrack */
+
+	#pragma omp parallel for schedule(static, 1)
+	for (unsigned short int i = 0; i < nb_thread; ++i)
+		uncover(instance, ctxs[i], chosen_item);		/* backtrack */
 }
 
 
@@ -90,11 +76,28 @@ int main(int argc, char **argv)
 		usage(argv);
 	next_report = report_delta;
 
+	nb_thread = omp_get_max_threads();
+
+	double stop;
+	unsigned long long nb_sol = 0;
 	struct instance_t * instance = load_matrix(in_filename);
-	// struct context_t * ctx = backtracking_setup(instance);
+	struct context_t ** ctxs = (struct context_t **) malloc(nb_thread * sizeof(* ctxs));
+
+	#pragma omp parallel for schedule(static, 1)
+	for (unsigned short int i = 0; i < nb_thread; ++i)
+	{
+		ctxs[i] = backtracking_setup(instance);
+		ctxs[i]->nodes = 1;
+	}
+
 	start = wtime();
-	solve_OMP(instance);
-	printf("FINI. Trouvé %lld solutions en %.1fs\n", 0LL,//ctxs[0]->solutions, 
-			wtime() - start);
+	solve_OMP(instance, ctxs);
+	stop = wtime() - start;
+
+	#pragma omp parallel for reduction(+:nb_sol)
+	for (unsigned short int i = 0; i < nb_thread; ++i)
+		nb_sol += ctxs[i]->solutions;
+
+	printf("FINI. Trouvé %lld solutions en %.1fs\n", nb_sol, stop);
 	exit(EXIT_SUCCESS);
 }
