@@ -125,6 +125,7 @@ void progress_report(const struct context_t *ctx)
 
 struct sparse_array_t * sparse_array_init(int n)
 {
+	printf("Size of struct : %ld\n",sizeof(struct sparse_array_t*));
 	struct sparse_array_t * S = malloc(sizeof(*S));
 	if (S == NULL)
 		err(1, "impossible d'allouer un tableau creux");
@@ -293,6 +294,7 @@ struct instance_t * load_matrix(const char * filename)
 		errx(1, "Impossible d'avoir 0 objets ou 0 options");
 	instance->n_items = n_it;
 	instance->n_options = n_op;
+	instance->n_primary = 0;
 	instance->item_name = malloc(n_it * sizeof(char *));
 	instance->ptr = malloc((n_op + 1) * sizeof(int));
 	instance->options = malloc(n_it * n_op * sizeof(int));         // surallocation massive
