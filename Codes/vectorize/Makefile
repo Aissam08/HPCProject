@@ -1,5 +1,5 @@
 CC := gcc-10
-CCFLAGS := -Wall -O3
+CCFLAGS := -Wall -Wextra -O3
 INFLAGS := -I../../includes
 LFLAGS := -fopenmp
 
