@@ -1,5 +1,5 @@
 CC := gcc-10
-CCFLAGS := -Wall -Wextra -O3
+CCFLAGS := -Wall -Wextra -g -O3
 INFLAGS := -I../../includes
 LFLAGS := -fopenmp
 
@@ -13,8 +13,8 @@ all:
 	@make $(EXEC)
 
 %: %.c
-	$(CC) $(CCFLAGS) $^ -o $@ $(INFLAGS) $(LFLAGS)
-
+	#$(CC) $(CCFLAGS) $^ -o $@ $(INFLAGS) $(LFLAGS)
+	$(CC) $(CCFLAGS) $^ -o $@ $(LFLAGS)
 
 clean:
 	@rm -f $(EXEC)
