@@ -5,53 +5,56 @@
 #include <cover_functions.h>
 
 
-// void solve_OMP(const struct instance_t * instance)
-// {
-// 	struct context_t * ctx = backtracking_setup(instance);
-// 	// ctx->nodes++;
-// 	// if (ctx->nodes == next_report)
-// 	// 	progress_report(ctx);
-// 	// if (sparse_array_empty(ctx->active_items)) {
-// 	// 	solution_found(instance, ctx);
-// 	// 	return;			/* succès : plus d'objet actif */
-// 	// }
-// 	int chosen_item = choose_next_item(ctx);
-// 	struct sparse_array_t *active_options = ctx->active_options[chosen_item];
-// 	// if (sparse_array_empty(active_options))
-// 	// 	return;			/* échec : impossible de couvrir chosen_item */
-// 	cover(instance, ctx, chosen_item);
-// 	ctx->num_children[ctx->level] = active_options->len;
+void solve_OMP(const struct instance_t * instance)
+{
+	unsigned short int nb_thread = omp_get_max_threads();
+	int chosen_item;
+	struct sparse_array_t * active_options;
+	struct context_t ** ctxs = (struct context_t **) malloc(nb_thread * sizeof(* ctxs));
+	
+	// #pragma omp parallel for schedule(static, 1)
+	for (unsigned short int i = 0; i < nb_thread; ++i)
+	{
+		ctxs[i] = backtracking_setup(instance);
+		ctxs[i]->nodes++;
+		if (!i) {
+			chosen_item = choose_next_item(ctxs[0]);
+			active_options = ctxs[0]->active_options[chosen_item];
+		}
+		cover(instance, ctxs[i], chosen_item);
+		ctxs[i]->num_children[0] = active_options->len;
+	}
 
-// 	#pragma omp parallel for schedule(dynamic, 100)
-// 	for (int k = 0; k < active_options->len; k++) {
+	#pragma omp parallel for schedule(dynamic)
+	for (int k = 0; k < active_options->len; k++) {
 
-// 		printf("Thread %d got k = %d\n", omp_get_thread_num(), k);
+		// printf("Thread %d got k = %d\n", omp_get_thread_num(), k);
 
-// 		int option = active_options->p[k];
+		int option = active_options->p[k];
 
-// 		printf("Thread %d DEBUG 1\n", omp_get_thread_num());
+		// printf("Thread %d DEBUG 1\n", omp_get_thread_num());
 
-// 		ctx->child_num[ctx->level] = k;
+		ctxs[omp_get_thread_num()]->child_num[ctxs[omp_get_thread_num()]->level] = k;
 
-// 		printf("Thread %d DEBUG 2\n", omp_get_thread_num());
+		// printf("Thread %d DEBUG 2\n", omp_get_thread_num());
 
-// 		choose_option(instance, ctx, option, chosen_item);
+		choose_option(instance, ctxs[omp_get_thread_num()], option, chosen_item);
 
-// 		printf("Thread %d DEBUG 3\n", omp_get_thread_num());
+		// printf("Thread %d DEBUG 3\n", omp_get_thread_num());
 
-// 		solve(instance, ctx);
+		solve(instance, ctxs[omp_get_thread_num()]);
 
-// 		printf("Thread %d DEBUG 4\n", omp_get_thread_num());
+		// printf("Thread %d DEBUG 4\n", omp_get_thread_num());
 
-// 		if (ctx->solutions >= max_solutions)
-// 			exit(0);
+		if (ctxs[omp_get_thread_num()]->solutions >= max_solutions)
+			exit(0);
 
-// 		printf("Thread %d DEBUG 5\n", omp_get_thread_num());
+		// printf("Thread %d DEBUG 5\n", omp_get_thread_num());
 
-// 		unchoose_option(instance, ctx, option, chosen_item);
-// 	}
-// 	uncover(instance, ctx, chosen_item);		/* backtrack */
-// }
+		unchoose_option(instance, ctxs[omp_get_thread_num()], option, chosen_item);
+	}
+	uncover(instance, ctxs[omp_get_thread_num()], chosen_item);		/* backtrack */
+}
 
 
 int main(int argc, char **argv)
@@ -91,7 +94,7 @@ int main(int argc, char **argv)
 	// struct context_t * ctx = backtracking_setup(instance);
 	start = wtime();
 	solve_OMP(instance);
-	printf("FINI. Trouvé %lld solutions en %.1fs\n", ctx->solutions, 
+	printf("FINI. Trouvé %lld solutions en %.1fs\n", 0LL,//ctxs[0]->solutions, 
 			wtime() - start);
 	exit(EXIT_SUCCESS);
 }

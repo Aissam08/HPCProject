@@ -445,7 +445,6 @@ struct instance_t * load_matrix(const char * filename)
 
 struct context_t * backtracking_setup(const struct instance_t * instance)
 {
-	printf("Beginning truc\n");
 	struct context_t * ctx = malloc(sizeof(*ctx));
 	if (ctx == NULL)
 		err(1, "impossible d'allouer un contexte");
@@ -459,11 +458,9 @@ struct context_t * backtracking_setup(const struct instance_t * instance)
 	ctx->child_num = malloc(n * sizeof(*ctx->child_num));
 	ctx->num_children = malloc(n * sizeof(*ctx->num_children));
 
-	printf("All allocs are made successfully\n");
 	if (ctx->active_options == NULL || ctx->chosen_options == NULL || ctx->child_num == NULL || ctx->num_children == NULL)
 		err(1, "impossible d'allouer le contexte");
 
-	printf("Parcours option...\n");
 	ctx->active_items = sparse_array_init(n);
 
 	for (int item = 0; item < instance->n_primary; ++item)
@@ -477,7 +474,6 @@ struct context_t * backtracking_setup(const struct instance_t * instance)
 			int item = instance->options[k];
 			sparse_array_add(ctx->active_options[item], option);
 		}
-	printf("Context created\n");
 	return ctx;
 }
 
