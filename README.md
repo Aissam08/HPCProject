@@ -6,10 +6,10 @@ overleaf : https://fr.overleaf.com/project/603e4619f1d06434ef4d86cd
 
 Contributors : 
 
-* Maxence La foufoune
-* Tristana ton patron
-* Nawel la zoulette
-* Aissam lechefesse
+* Maxime Lafont--Trevisa
+* Tristan Michel
+* Naël Sennoun
+* Aissam Rabhi
 
 Exact cover problem is represented by those functions : 
 
