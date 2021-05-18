@@ -125,7 +125,6 @@ void progress_report(const struct context_t *ctx)
 
 struct sparse_array_t * sparse_array_init(int n)
 {
-	printf("Size of struct : %ld\n",sizeof(struct sparse_array_t*));
 	struct sparse_array_t * S = malloc(sizeof(*S));
 	if (S == NULL)
 		err(1, "impossible d'allouer un tableau creux");
