@@ -6,7 +6,7 @@
 int nb_MPI_proc, my_MPI_rank;
 
 
-void receive_pb_data(struct instance_t * instance, struct context_t * ctx) 
+void receive_pb_data(struct instance_t * instance, struct context_t * ctx, int * common_item) 
 {
 	int *to_recv = malloc(2 * sizeof(int));
 
@@ -20,9 +20,11 @@ void receive_pb_data(struct instance_t * instance, struct context_t * ctx)
 	MPI_Bcast(recv_items, to_recv[1], MPI_INT, 0, MPI_COMM_WORLD);
 }
 
-void send_pb_data(struct instance_t * instance)
+void send_pb_data(struct instance_t * instance, struct context_t * ctx, int * common_item)
 {
 	instance = load_matrix(in_filename);
+	ctx = backtracking_setup(instance);
+	*common_item = choose_next_item(ctx);
 
 	printf("Nombre d'items : %d\n", instance->n_items);
 	printf("Nombre primary : %d\n", instance->n_primary);
@@ -37,34 +39,99 @@ void send_pb_data(struct instance_t * instance)
 }
 
 
-void solve_MPI(const struct instance_t * instance, struct context_t * ctx, MPI_Status status)
+void solve_MPI(const struct instance_t * instance, struct context_t * ctx, int chosen_item, int option)
 {
-	ctx->nodes++;
-	
-	if (ctx->nodes == next_report)
-		progress_report(ctx);
-	
-	if (sparse_array_empty(ctx->active_items)) {
-		solution_found(instance, ctx);
-		return;			/* succès : plus d'objet actif */
-	}
-	int chosen_item = choose_next_item(ctx);
-	struct sparse_array_t *active_options = ctx->active_options[chosen_item];
-	if (sparse_array_empty(active_options))
-		return;			/* échec : impossible de couvrir chosen_item */
-	cover(instance, ctx, chosen_item);
-	ctx->num_children[ctx->level] = active_options->len;
+	choose_option(instance, ctx, option, chosen_item);
+	solve(instance, ctx);
+	if (ctx->solutions >= max_solutions)
+		return;
+	unchoose_option(instance, ctx, option, chosen_item);
+}
 
-	for (int k = 0; k < active_options->len; k++) {
-		int option = active_options->p[k];
-		ctx->child_num[ctx->level] = k;
-		choose_option(instance, ctx, option, chosen_item);
-		solve(instance, ctx);
-		if (ctx->solutions >= max_solutions)
-			return;
-		unchoose_option(instance, ctx, option, chosen_item);
+void comm_solve_MPI(const struct instance_t * instance, struct context_t * ctx, int chosen_item)
+{
+	MPI_Status status;
+	bool end = false;
+	int i, com_buffer[3];		// node_id / nb_nodes / nb_sol
+	unsigned long long nb_nodes = 0, nb_sol = 0;
+
+	if (!my_MPI_rank) {
+		for (i = 0; i < nb_MPI_proc - 1; ++i) {
+			com_buffer[0] = i;
+			MPI_Send(com_buffer, 3, MPI_INT, i + 1, 1, MPI_COMM_WORLD);
+		}
+		while (i < ctx->active_options[chosen_item]->len && !end) {
+			MPI_Recv(com_buffer, 3, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			switch (status.MPI_TAG)
+			{
+				case 2 :
+					nb_nodes += com_buffer[1];
+					nb_sol += com_buffer[2];
+					com_buffer[0] = i;
+					com_buffer[1] = nb_nodes;
+					com_buffer[2] = nb_sol;
+					printf("Received branch %d with %d solutions from process %d.\n", com_buffer[0], com_buffer[2], status.MPI_SOURCE);
+					MPI_Send(com_buffer, 3, MPI_INT, status.MPI_SOURCE, 1, MPI_COMM_WORLD);
+					break;
+
+				case 99 :
+					end = true;
+					break;
+
+				default:
+					--i;
+					com_buffer[1] = nb_nodes;
+					com_buffer[2] = nb_sol;
+					printf("Received unknown type communication. Resetting process %d.\n", status.MPI_SOURCE);
+					MPI_Send(com_buffer, 3, MPI_INT, status.MPI_SOURCE, 2, MPI_COMM_WORLD);
+					break;
+			}
+
+			for (i = 1; i < nb_MPI_proc; ++i) {
+				MPI_Recv(com_buffer, 3, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+				nb_nodes += com_buffer[1];
+				nb_sol += com_buffer[2];
+				MPI_Send(com_buffer, 3, MPI_INT, status.MPI_SOURCE, 99, MPI_COMM_WORLD);
+			}
+		}
+	} else {
+		int k;
+		if (ctx->nodes == next_report)
+			progress_report(ctx);
+		if (sparse_array_empty(ctx->active_items)) {
+			solution_found(instance, ctx);
+			return;		/* succès : plus d'objet actif */
+		}
+
+		struct sparse_array_t * active_options = ctx->active_options[chosen_item];
+		if (sparse_array_empty(active_options))
+			return;		/* échec : impossible de couvrir chosen_item */
+		cover(instance, ctx, chosen_item);
+		ctx->num_children[ctx->level] = active_options->len;
+		
+		while (!end) {
+			MPI_Recv(com_buffer, 3, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			switch (status.MPI_TAG)
+			{
+				case 1 :
+					k = com_buffer[0];
+					ctx->nodes = com_buffer[1] + 1;
+					ctx->solutions = com_buffer[2];
+					ctx->child_num[ctx->level] = k;
+					solve_MPI(instance, ctx, chosen_item, active_options->p[k]);
+					
+					com_buffer[0] = k;
+					com_buffer[1] = ctx->nodes;
+					com_buffer[2] = ctx->solutions;
+					MPI_Ssend(com_buffer, 3, MPI_INT, 0, 2, MPI_COMM_WORLD);
+
+				case 99 :
+					end = true;
+					break;
+			}
+		}
+		uncover(instance, ctx, chosen_item);	/* backtrack */
 	}
-	uncover(instance, ctx, chosen_item);	/* backtrack */
 }
 
 
@@ -91,14 +158,14 @@ int main(int argc, char **argv)
 
 	struct instance_t * instance = NULL;
 	struct context_t * ctx = NULL;
+	int * common_item = (int *) malloc(sizeof(int));
 
-	if (my_MPI_rank == 0)
-		send_pb_data(instance);
+	if (my_MPI_rank)
+		receive_pb_data(instance, ctx, common_item);
 	else
-		receive_pb_data(instance, ctx);
+		send_pb_data(instance, ctx, common_item);
 
-
-
+	// comm_solve_MPI(instance, ctx, *common_item);
 
 	MPI_Finalize();
 	exit(EXIT_SUCCESS);
