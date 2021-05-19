@@ -1,12 +1,13 @@
 #include <mpi.h>
+#include <stddef.h>
 
 #include <cover_functions.h>
 
 
 int nb_MPI_proc, my_MPI_rank;
 
-
-void receive_pb_data(struct instance_t * instance, struct context_t * ctx) 
+/*
+void receive_pb_data(struct instance_t * instance ) //, struct context_t * ctx) 
 {
 	int *to_recv = malloc(2 * sizeof(int));
 
@@ -19,21 +20,26 @@ void receive_pb_data(struct instance_t * instance, struct context_t * ctx)
 	MPI_Bcast(recv_opt, to_recv[2], MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(recv_items, to_recv[1], MPI_INT, 0, MPI_COMM_WORLD);
 }
-
-void send_pb_data(struct instance_t * instance)
+*/
+void send_pb_data(struct instance_t * instance, MPI_Datatype mpi_type)
 {
-	instance = load_matrix(in_filename);
+	struct instance_t *to_send = malloc(sizeof(struct instance_t*));
+	to_send->n_items = instance->n_items;
+	to_send->n_primary = instance->n_primary;
+	to_send->n_options = instance->n_options;
+	to_send->item_name = instance->item_name;
+	to_send->options = instance->options;
+	to_send->ptr = instance->ptr;
 
 	printf("Nombre d'items : %d\n", instance->n_items);
 	printf("Nombre primary : %d\n", instance->n_primary);
 	printf("Nombre d'options : %d\n", instance->n_options);
 	printf("Taille tableau options : %d\n", instance->n_items * instance->n_options);
 
-	int to_send[] = {instance->n_items, instance->n_primary, instance->n_options};
-
-	MPI_Bcast(to_send, 3, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Bcast(instance->options, instance->n_options, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Bcast(instance->ptr, instance->n_items, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Send(&to_send,1,mpi_type,1,0, MPI_COMM_WORLD);
+	//MPI_Bcast(to_send, 3, MPI_INT, 0, MPI_COMM_WORLD);
+	//MPI_Bcast(instance->options, instance->n_options, MPI_INT, 0, MPI_COMM_WORLD);
+	//MPI_Bcast(instance->ptr, instance->n_items, MPI_INT, 0, MPI_COMM_WORLD);
 }
 
 
@@ -72,34 +78,45 @@ int main(int argc, char **argv)
 {
 	option_setup(argc, argv);
 
-	// MPI_Status status;
+	MPI_Status status;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &nb_MPI_proc);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_MPI_rank);
 
-	// MPI_Type_struct(3, B, D, type1, newtype)
-	// --> { (2,1,2), (0,16,26), (MPI_FLOAT, {(double,0), (char,8) } , MPI_CHAR), name_of_type }
-		// - Il y aura 3 composantes dans la structure
-		// 	- longueur des données (2 / 1 / 3)
-		// 	- La structure contient 2 FLOAT, 1 map et 3 char
-		// 	- le map est composé d'un double et d'un char 
-		// 	- longueur d'écarts (0,16,26)
-		// 	- le MPI_FLOAT est à 0 / 
-		// 	- le type1 (map) commence à 16 (après 2 float de 8 octet)
-		// 	- le MPI_CHAR commence à 26 octet (16 + 9)
 
-	struct instance_t * instance = NULL;
-	struct context_t * ctx = NULL;
+	MPI_Datatype mpi_instance; 	/*Création d'un nouveau type (pointeur vers structure) */
+	MPI_Type_commit(&mpi_instance);	/*Le déclarer pour MPI*/
+	MPI_Datatype types[] = {MPI_INT, MPI_INT,
+							MPI_INT, MPI_INT,
+							MPI_INT, MPI_INT}; /* Tableau des types de variables 
+												(un tableau est un MPI_INT de grande taille) */
+	MPI_Aint displacements[6] = {
+		offsetof(struct  instance_t,n_items),
+		offsetof(struct  instance_t,n_primary),
+		offsetof(struct  instance_t,n_options),
+		offsetof(struct  instance_t,item_name),
+		offsetof(struct  instance_t, options),
+		offsetof(struct  instance_t, ptr)
+	};											/*displacement prend en compte la taille de chaque élément
+												  de la structure de données avec offserof                */
+
+	struct instance_t * instance = load_matrix(in_filename);
+
+	/* La longueur de chaque block (c'est là qu'on met la taille des tableaux)*/
+	const int block_length[] = {1, 1, 1, instance->n_items, instance->n_options, instance->n_options+1};
+
+	/*Creation de la structure MPI */
+	MPI_Type_create_struct(6,block_length,displacements,types, &mpi_instance);
 
 	if (my_MPI_rank == 0)
-		send_pb_data(instance);
-	else
-		receive_pb_data(instance, ctx);
+		send_pb_data(instance, mpi_instance);
+	//else
+	//	receive_pb_data(instance, ctx);
+	
 
 
-
-
+	MPI_Type_free(&mpi_instance);
 	MPI_Finalize();
 	exit(EXIT_SUCCESS);
 }
