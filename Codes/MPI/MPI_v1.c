@@ -7,43 +7,42 @@
 int nb_MPI_proc, my_MPI_rank;
 
 
-void receive_pb_data(MPI_Datatype mpi_type, struct instance_t * instance, struct context_t * ctx, int * common_item)
+void receive_pb_data(struct instance_t * instance, struct context_t * ctx, int * common_item)
 {
-	int *to_recv = malloc(2 * sizeof(int));
+	instance = (struct instance_t *) malloc(sizeof(*instance));
+	
+	int buffer[4];
+	MPI_Bcast(buffer, 4, MPI_INT, 0, MPI_COMM_WORLD);
+	instance->n_items = buffer[0];
+	instance->n_primary = buffer[1];
+	instance->n_options = buffer[2];
+	*common_item = buffer[3];
 
-	MPI_Bcast(to_recv, 3, MPI_INT, 0, MPI_COMM_WORLD);
+	instance->item_name = NULL;
+	instance->options = (int *) malloc(instance->n_options * instance->n_items * sizeof(int));
+	MPI_Bcast(instance->options, instance->n_options * instance->n_items, MPI_INT, 0, MPI_COMM_WORLD);
 
-	printf("Reçu : %d / %d / %d\n", to_recv[0], to_recv[1], to_recv[2]);
-	int *recv_opt = malloc(to_recv[2] * sizeof(int));
-	int *recv_items = malloc(to_recv[1] * sizeof(int));
+	instance->ptr = (int *) malloc((instance->n_options + 1) * sizeof(int));
+	MPI_Bcast(instance->ptr, instance->n_options + 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-	MPI_Bcast(recv_opt, to_recv[2], MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Bcast(recv_items, to_recv[1], MPI_INT, 0, MPI_COMM_WORLD);
+	printf("On process %d : received %d items & %d options.\n", my_MPI_rank, instance->n_items, instance->n_options);
+	ctx = backtracking_setup(instance);
+	printf("On process %d : contexte created.\n", my_MPI_rank);
 }
 
-void send_pb_data(MPI_Datatype mpi_type, struct instance_t * instance, struct context_t * ctx, int * common_item)
+void send_pb_data(struct instance_t * instance, struct context_t * ctx, int * common_item)
 {
 	instance = load_matrix(in_filename);
 	ctx = backtracking_setup(instance);
 	*common_item = choose_next_item(ctx);
 
-	struct instance_t *to_send = malloc(sizeof(struct instance_t*));
-	to_send->n_items = instance->n_items;
-	to_send->n_primary = instance->n_primary;
-	to_send->n_options = instance->n_options;
-	to_send->item_name = instance->item_name;
-	to_send->options = instance->options;
-	to_send->ptr = instance->ptr;
+	printf("From Master : got %d items, %d primary & %d options to broadcast.\n",
+		instance->n_items, instance->n_primary, instance->n_options);
 
-	printf("Nombre d'items : %d\n", instance->n_items);
-	printf("Nombre primary : %d\n", instance->n_primary);
-	printf("Nombre d'options : %d\n", instance->n_options);
-	printf("Taille tableau options : %d\n", instance->n_items * instance->n_options);
-
-	MPI_Send(&to_send,1,mpi_type,1,0, MPI_COMM_WORLD);
-	//MPI_Bcast(to_send, 3, MPI_INT, 0, MPI_COMM_WORLD);
-	//MPI_Bcast(instance->options, instance->n_options, MPI_INT, 0, MPI_COMM_WORLD);
-	//MPI_Bcast(instance->ptr, instance->n_items, MPI_INT, 0, MPI_COMM_WORLD);
+	int buffer[4] = {instance->n_items, instance->n_primary, instance->n_options, *common_item};
+	MPI_Bcast(buffer, 4, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(instance->options, instance->n_options * instance->n_items, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(instance->ptr, instance->n_options + 1, MPI_INT, 0, MPI_COMM_WORLD);
 }
 
 
@@ -147,31 +146,11 @@ int main(int argc, char **argv)
 {
 	option_setup(argc, argv);
 
-	MPI_Status status;
-
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &nb_MPI_proc);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_MPI_rank);
 
-	MPI_Datatype mpi_instance; 	/*Création d'un nouveau type (pointeur vers structure) */
-	MPI_Type_commit(&mpi_instance);	/*Le déclarer pour MPI*/
-	MPI_Datatype types[] = {MPI_INT, MPI_INT, MPI_INT, MPI_CHAR, MPI_INT, MPI_INT};
-	/* Tableau des types de variables (un tableau est un MPI_INT de grande taille) */
-
-	MPI_Aint displacements[6] = {
-		offsetof(struct instance_t, n_items),
-		offsetof(struct instance_t, n_primary),
-		offsetof(struct instance_t, n_options),
-		offsetof(struct instance_t, item_name),
-		offsetof(struct instance_t, options),
-		offsetof(struct instance_t, ptr)
-	}; /*displacement prend en compte la taille de chaque élément de la structure de données avec offserof */
-
-	/* La longueur de chaque block (c'est là qu'on met la taille des tableaux)*/
-	const int block_length[] = {1, 1, 1, instance->n_items, instance->n_options, instance->n_options + 1};
-
-	/*Creation de la structure MPI */
-	MPI_Type_create_struct(6, block_length, displacements, types, &mpi_instance);
+	printf("Hello from process %d.\n", my_MPI_rank);
 
 	struct instance_t * instance = NULL;
 	struct context_t * ctx = NULL;
@@ -182,9 +161,10 @@ int main(int argc, char **argv)
 	else
 		send_pb_data(instance, ctx, common_item);
 
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	// comm_solve_MPI(instance, ctx, *common_item);
 
-	MPI_Type_free(&mpi_instance);
 	MPI_Finalize();
 	exit(EXIT_SUCCESS);
 }
