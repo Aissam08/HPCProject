@@ -6,7 +6,7 @@ overleaf : https://fr.overleaf.com/project/603e4619f1d06434ef4d86cd
 
 Contributors : 
 
-* Maxime Lafont--Trevisa
+* Maxime Lafont--Trevisan
 * Tristan Michel
 * Naël Sennoun
 * Aissam Rabhi
