@@ -70,9 +70,9 @@ void comm_solve_MPI(const struct instance_t * instance, struct context_t * ctx, 
 	long long int nb_nodes = 0LL, nb_sol = 0LL;
 
 	if (!my_MPI_rank) {
-		for (i = 1; i < nb_MPI_proc; ++i) {
-			com_buffer[0] = i - 1;
-			MPI_Send(com_buffer, 3, MPI_LONG_LONG_INT, i, 1, MPI_COMM_WORLD);
+		for (i = 0; i < nb_MPI_proc - 1; ++i) {
+			com_buffer[0] = i;
+			MPI_Send(com_buffer, 3, MPI_LONG_LONG_INT, i + 1, 1, MPI_COMM_WORLD);
 		}
 		while (i < ctx->active_options[chosen_item]->len && !end) {
 			MPI_Recv(com_buffer, 3, MPI_LONG_LONG_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -94,6 +94,8 @@ void comm_solve_MPI(const struct instance_t * instance, struct context_t * ctx, 
 					nb_nodes += com_buffer[1];
 					nb_sol += com_buffer[2];
 					end = true;
+					com_buffer[1] = nb_nodes;
+					com_buffer[2] = nb_sol;
 					MPI_Send(com_buffer, 3, MPI_LONG_LONG_INT, status.MPI_SOURCE, 99, MPI_COMM_WORLD);
 					break;
 
@@ -128,8 +130,8 @@ void comm_solve_MPI(const struct instance_t * instance, struct context_t * ctx, 
 					ctx->nodes = nb_nodes = com_buffer[1] + 1;
 					ctx->solutions = nb_sol = com_buffer[2];
 					ctx->child_num[ctx->level] = com_buffer[0];
-					if (debug)
-						printf("Node %d received branch %llu to solve.\n", my_MPI_rank, com_buffer[0]);
+					// if (debug)
+					// 	printf("Node %d received branch %llu to solve.\n", my_MPI_rank, com_buffer[0]);
 					solve_MPI(instance, ctx, chosen_item, active_options->p[com_buffer[0]]);
 
 					com_buffer[1] = ctx->nodes - nb_nodes;
@@ -164,16 +166,16 @@ int main(int argc, char **argv)
 
 	struct instance_t * instance = NULL;
 	struct context_t * ctx = NULL;
-	int * common_item = (int *) malloc(sizeof(int));
+	int common_item;
 
 	if (my_MPI_rank)
-		receive_pb_data(&instance, &ctx, common_item);
+		receive_pb_data(&instance, &ctx, &common_item);
 	else
-		send_pb_data(&instance, &ctx, common_item);
+		send_pb_data(&instance, &ctx, &common_item);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	start = wtime();
-	comm_solve_MPI(instance, ctx, *common_item, false);
+	comm_solve_MPI(instance, ctx, common_item, false);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (!my_MPI_rank)
@@ -181,7 +183,6 @@ int main(int argc, char **argv)
 
 	free(instance);
 	free(ctx);
-	free(common_item);
 	MPI_Finalize();
 	exit(0);
 }
