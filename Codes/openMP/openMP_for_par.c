@@ -27,15 +27,15 @@ void solve_OMP(const struct instance_t * instance, struct context_t ** ctxs)
 	#pragma omp parallel for schedule(dynamic)
 	for (i = 0; i < active_options->len; ++i)
 	{
-		unsigned int th_num = omp_get_thread_num();
+		unsigned short int my_thread = omp_get_thread_num();
 		int option = active_options->p[i];
-		ctxs[th_num]->child_num[ctxs[th_num]->level] = i;
-		choose_option(instance, ctxs[th_num], option, chosen_item);
-		solve(instance, ctxs[th_num]);
+		ctxs[my_thread]->child_num[ctxs[my_thread]->level] = i;
+		choose_option(instance, ctxs[my_thread], option, chosen_item);
+		solve(instance, ctxs[my_thread]);
 
-		if (ctxs[th_num]->solutions >= max_solutions)
+		if (ctxs[my_thread]->solutions >= max_solutions)
 			exit(0);
-		unchoose_option(instance, ctxs[th_num], option, chosen_item);
+		unchoose_option(instance, ctxs[my_thread], option, chosen_item);
 	}
 
 	#pragma omp parallel for schedule(static, 1) reduction(+:nb_sol)
@@ -52,9 +52,8 @@ int main(int argc, char **argv)
 
 	nb_thread = omp_get_max_threads();
 
-	double stop;
 	struct instance_t * instance = load_matrix(in_filename);
-	struct context_t ** ctxs = (struct context_t **) malloc(nb_thread * sizeof(* ctxs));
+	struct context_t ** ctxs = (struct context_t **) malloc(nb_thread * sizeof(struct context_t *));
 
 	#pragma omp parallel for schedule(static, 1)
 	for (unsigned short int i = 0; i < nb_thread; ++i)
@@ -65,8 +64,7 @@ int main(int argc, char **argv)
 
 	start = wtime();
 	solve_OMP(instance, ctxs);
-	stop = wtime() - start;
 
-	printf("FINI. Trouvé %lld solutions en %.2fs\n", nb_sol, stop);
+	printf("FINI. Trouvé %lld solutions en %.2fs\n", nb_sol, wtime() - start);
 	exit(EXIT_SUCCESS);
 }

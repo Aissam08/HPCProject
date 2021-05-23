@@ -184,5 +184,5 @@ int main(int argc, char **argv)
 	free(instance);
 	free(ctx);
 	MPI_Finalize();
-	exit(0);
+	exit(EXIT_SUCCESS);
 }

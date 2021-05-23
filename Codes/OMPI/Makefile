@@ -1,7 +1,7 @@
 CC := mpicc
 CCFLAGS := -Wall -Wextra -g -O3
 INFLAGS := -I../../includes
-LFLAGS := 
+LFLAGS := -fopenmp
 
 SRC := $(wildcard *.c)
 EXEC := $(SRC:%.c=%)
