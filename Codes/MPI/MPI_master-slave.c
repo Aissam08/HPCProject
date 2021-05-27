@@ -1,5 +1,4 @@
 #include <mpi.h>
-#include <stddef.h>
 
 #include <cover_functions.h>
 
