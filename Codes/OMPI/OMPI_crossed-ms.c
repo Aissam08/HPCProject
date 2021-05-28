@@ -5,7 +5,7 @@
 
 #include <cover_functions.h>
 
-#define FACTOR 1
+#define FACTOR 8
 
 
 unsigned int nb_MPI_proc, my_MPI_rank, nb_OMP_thread;
