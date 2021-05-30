@@ -14,9 +14,9 @@ unsigned int * thread_per_proc, * jobs;
 
 long long int min_job()
 {	
-	unsigned int min_val = jobs[1];
+	unsigned int min_val = jobs[0];
 	#pragma omp parallel for reduction(min:min_val)
-	for (unsigned short int k = 2; k < (unsigned short int) nb_MPI_proc; ++k)
+	for (unsigned short int k = 1; k < (unsigned short int) nb_MPI_proc; ++k)
 		min_val = jobs[k];
 	return (long long int) min_val;
 }
@@ -66,8 +66,9 @@ void send_pb_data(struct instance_t ** instance, struct context_t ** ctx, int * 
 
 	jobs = (unsigned int *) malloc(nb_MPI_proc * sizeof(unsigned int));
 	#pragma omp parallel for
-	for (unsigned int k = 1; k < nb_MPI_proc; ++k)
-		jobs[k] = k - 1 + thread_per_proc[k] * nb_MPI_proc * FACTOR;
+	for (unsigned int k = 0; k < nb_MPI_proc - 1; ++k)
+		jobs[k] = k + thread_per_proc[k] * nb_MPI_proc * FACTOR;
+	jobs[nb_MPI_proc - 1] = nb_MPI_proc - 1;
 
 	int buffer[4] = {(*instance)->n_items, (*instance)->n_primary, (*instance)->n_options, *common_item};
 	MPI_Bcast(buffer, 4, MPI_INT, 0, MPI_COMM_WORLD);
@@ -111,11 +112,13 @@ void solve_OMP(const struct instance_t * instance, struct context_t ** ctxs, int
 	buffer[1] = 0LL; buffer[2] = 0LL;
 	#pragma omp parallel for schedule(static,1) reduction(+:buffer[1])
 	for (i = 0; i < nb_OMP_thread; ++i)
-		buffer[1] += ctxs[i]->nodes - nb_nodes;
+		buffer[1] += ctxs[i]->nodes;
+	buffer[1] -= nb_nodes * nb_OMP_thread;
 
 	#pragma omp parallel for schedule(static,1) reduction(+:buffer[2])
 	for (i = 0; i < nb_OMP_thread; ++i)
-		buffer[2] += ctxs[i]->solutions - nb_sol;
+		buffer[2] += ctxs[i]->solutions;
+	buffer[2] -= nb_sol * nb_OMP_thread;
 }
 
 
@@ -124,20 +127,24 @@ void solve_OMPI_master(struct context_t * ctx, int chosen_item, bool debug)
 	MPI_Status status;
 	bool end = false;
 	long long int com_buffer[3] = {0LL, 0LL, 0LL};		// node_id / nb_nodes / nb_sol
-	long long int nb_nodes = 0LL, nb_sol = 0LL;
+	long long int nb_nodes = 0LL, nb_sol = 0LL, leap;
 
 	while (!end) {
 		MPI_Recv(com_buffer, 3, MPI_LONG_LONG_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		switch (status.MPI_TAG)
 		{
 			case 2 :
-				if (debug)
-					printf("Received branches %lld:%lld step %u with %lld new solutions from process %d\n", com_buffer[0],
-						com_buffer[0] + thread_per_proc[status.MPI_SOURCE] * nb_MPI_proc * FACTOR - 1, nb_MPI_proc, com_buffer[2], status.MPI_SOURCE);
+				leap = thread_per_proc[status.MPI_SOURCE] * FACTOR * nb_MPI_proc;
 				nb_nodes += com_buffer[1];
 				nb_sol += com_buffer[2];
+
+				if (debug)
+					printf("Received branches %lld:%lld step %u with %lld new solutions from process %d\n", com_buffer[0],
+						com_buffer[0] + leap - nb_MPI_proc, nb_MPI_proc, com_buffer[2], status.MPI_SOURCE);
+
 				com_buffer[0] = min_job();
-				jobs[(com_buffer[0] + 1) % nb_MPI_proc] = com_buffer[0] + thread_per_proc[status.MPI_SOURCE] * nb_MPI_proc * FACTOR;
+				jobs[com_buffer[0] % nb_MPI_proc] = com_buffer[0] + leap;
+
 				com_buffer[1] = nb_nodes;
 				com_buffer[2] = nb_sol;
 				if (nb_sol < max_solutions && com_buffer[0] < (unsigned int) ctx->active_options[chosen_item]->len)
@@ -160,7 +167,7 @@ void solve_OMPI_master(struct context_t * ctx, int chosen_item, bool debug)
 		MPI_Recv(com_buffer, 3, MPI_LONG_LONG_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		if (debug)
 			printf("Received branches %lld:%lld step %u with %lld new solutions from process %d\n", com_buffer[0],
-				com_buffer[0] + thread_per_proc[status.MPI_SOURCE] * nb_MPI_proc * FACTOR - 1, nb_MPI_proc, com_buffer[2], status.MPI_SOURCE);
+				com_buffer[0] + thread_per_proc[status.MPI_SOURCE] * FACTOR * nb_MPI_proc - nb_MPI_proc, nb_MPI_proc, com_buffer[2], status.MPI_SOURCE);
 		nb_nodes += com_buffer[1];
 		nb_sol += com_buffer[2];
 		MPI_Send(com_buffer, 3, MPI_LONG_LONG_INT, status.MPI_SOURCE, 99, MPI_COMM_WORLD);
@@ -175,7 +182,7 @@ void solve_OMPI_slave(const struct instance_t * instance, struct context_t ** ct
 	MPI_Status status;
 	bool end = false;
 	unsigned int i = 0;
-	long long int com_buffer[3] = { (long long int) my_MPI_rank - 1, 0LL, 0LL};		// node_id / nb_nodes / nb_sol
+	long long int com_buffer[3] = {(long long int) my_MPI_rank - 1, 0LL, 0LL};		// node_id / nb_nodes / nb_sol
 
 	struct sparse_array_t * active_options = ctxs[0]->active_options[chosen_item];
 	if (sparse_array_empty(active_options))
