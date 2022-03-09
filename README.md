@@ -13,4 +13,4 @@ Contributors :
 
 Exact cover problem is represented by those functions : 
 
-![Alt Text](https://github.com/Aissam08/Tetris/blob/main/Help_func_visu.jpg)
+![Alt Text](https://github.com/Aissam08/HPCProject/blob/main/visu_function.pdf)
